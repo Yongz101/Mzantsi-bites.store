@@ -1,0 +1,13 @@
+{
+  "name": "Mzantsi Bites",
+  "short_name": "Mzantsi",
+  "description": "Authentic South African flavors at your fingertips.",
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#F59E0B",
+  "background_color": "#ffffff",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ]
+}
