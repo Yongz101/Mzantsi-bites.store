@@ -7,6 +7,7 @@ export const MENU_ITEMS: FoodItem[] = [
     name: 'Quarter Mutton Bunny Chow',
     description: 'A Durban classic. Hollowed out loaf of bread filled with spicy mutton curry, served with carrot sambals.',
     price: 125,
+    originalPrice: 150,
     category: 'Bunny Chow',
     image: 'https://images.unsplash.com/photo-1606491956689-2ea866880c84?q=80&w=800&auto=format&fit=crop',
     spiciness: 'Hot',
@@ -17,6 +18,7 @@ export const MENU_ITEMS: FoodItem[] = [
     name: 'Shisa Nyama Platter',
     description: 'A selection of flame-grilled Boerewors, Lamb Chops, and Chuck steak. Served with Chakalaka and Pap.',
     price: 245,
+    originalPrice: 295,
     category: 'Braai',
     image: 'https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=800&auto=format&fit=crop',
     popular: true
@@ -52,6 +54,7 @@ export const MENU_ITEMS: FoodItem[] = [
     name: 'Bobotie',
     description: 'Spiced minced meat baked with an egg-based topping. A Cape Malay masterpiece.',
     price: 145,
+    originalPrice: 180,
     category: 'Main',
     image: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?q=80&w=800&auto=format&fit=crop',
     popular: true

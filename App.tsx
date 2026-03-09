@@ -1,8 +1,9 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-// Added missing Utensils import
-import { MapPin, Bell, Utensils } from 'lucide-react';
+import { Utensils } from 'lucide-react';
 import { FoodItem, CartItem } from './types';
+import { collection, getDocs, addDoc, query, limit } from 'firebase/firestore';
+import { db } from './firebase';
 import { MENU_ITEMS, CATEGORIES } from './constants';
 import Header from './components/Header';
 import Hero from './components/Hero';
@@ -11,29 +12,114 @@ import CartSidebar from './components/CartSidebar';
 import ChatBot from './components/ChatBot';
 import BottomNav from './components/BottomNav';
 import SplashScreen from './components/SplashScreen';
+import AuthModal from './components/Auth/AuthModal';
+import CategorySection from './components/CategorySection';
+import { AuthProvider, useAuth } from './services/AuthContext';
+import StoreDashboard from './components/Store/StoreDashboard';
+import DriverDashboard from './components/Driver/DriverDashboard';
+import AdminDashboard from './components/Admin/AdminDashboard';
+import { ThemeProvider, useTheme } from './services/ThemeContext';
+import { LocationProvider, useLocation } from './services/LocationContext';
+import ProfileView from './components/Profile/ProfileView';
+import WalletView from './components/Profile/WalletView';
+import SettingsView from './components/Profile/SettingsView';
+import FavoritesView from './components/Profile/FavoritesView';
+import MapView from './components/Location/MapView';
+import PaymentSuccess from './components/Payment/PaymentSuccess';
 
-const App: React.FC = () => {
-  const [showSplash, setShowSplash] = useState(true);
+const AppContent: React.FC = () => {
+  const { user, loading } = useAuth();
+  const { theme } = useTheme();
+  const [showSplash, setShowSplash] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [menuItems, setMenuItems] = useState<FoodItem[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('menu');
-  const [locationName, setLocationName] = useState('Detecting Location...');
+  const [wishlist, setWishlist] = useState<string[]>([]);
 
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        () => setLocationName('Johannesburg South'), // Mocking localized result
-        () => setLocationName('Sandton Kitchen')
-      );
+    const fetchMenu = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'products'));
+        if (querySnapshot.empty) {
+          // Only attempt to seed if we have a user and they are an admin/store
+          // Otherwise just use fallback
+          if (user && (user.role === 'admin' || user.role === 'store')) {
+            console.log('Seeding database...');
+            for (const item of MENU_ITEMS) {
+              await addDoc(collection(db, 'products'), item);
+            }
+          }
+          setMenuItems(MENU_ITEMS);
+        } else {
+          const items = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as FoodItem[];
+          setMenuItems(items);
+        }
+      } catch (err: any) {
+        // If it's a permission error, it's expected for non-logged in users if rules are strict
+        if (err.code === 'permission-denied') {
+          // Silent fallback to local menu
+        } else {
+          console.error('Error fetching menu:', err);
+        }
+        setMenuItems(MENU_ITEMS); // Fallback
+      }
+    };
+    fetchMenu();
+  }, [user]); // Re-fetch when user changes to handle permission changes
+
+  useEffect(() => {
+    if (window.location.pathname === '/payment-success') {
+      setActiveTab('payment-success');
+    }
+    
+    // Handle external checkout sessions via URL
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('session');
+    
+    if (sessionId) {
+      const fetchSession = async () => {
+        try {
+          const response = await fetch(`/api/checkout-session/${sessionId}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.items) {
+              setCart(data.items);
+              setIsCartOpen(true);
+              // Clean up URL
+              window.history.replaceState({}, document.title, window.location.pathname);
+            }
+          }
+        } catch (error) {
+          console.error("Failed to fetch checkout session:", error);
+        }
+      };
+      fetchSession();
     }
   }, []);
 
   const filteredMenu = useMemo(() => {
-    if (selectedCategory === 'All') return MENU_ITEMS;
-    return MENU_ITEMS.filter(item => item.category === selectedCategory);
-  }, [selectedCategory]);
+    let items = menuItems;
+    if (selectedCategory !== 'All') {
+      items = items.filter(item => item.category === selectedCategory);
+    }
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      items = items.filter(item => 
+        item.name.toLowerCase().includes(query) || 
+        item.description.toLowerCase().includes(query) ||
+        item.category.toLowerCase().includes(query)
+      );
+    }
+    return items;
+  }, [selectedCategory, searchQuery, menuItems]);
 
   const addToCart = (item: FoodItem) => {
     setCart(prev => {
@@ -61,126 +147,274 @@ const App: React.FC = () => {
     }).filter(item => item.quantity > 0));
   };
 
+  const toggleWishlist = (id: string) => {
+    setWishlist(prev => 
+      prev.includes(id) ? prev.filter(itemId => itemId !== id) : [...prev, id]
+    );
+  };
+
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
 
-  if (showSplash) return <SplashScreen onComplete={() => setShowSplash(false)} />;
+  if (loading) return <SplashScreen onComplete={() => {}} />;
 
-  return (
-    <div className="min-h-screen relative flex flex-col bg-stone-50 overflow-x-hidden">
-      <Header cartCount={cartCount} onOpenCart={() => setIsCartOpen(true)} />
-      
-      <main className="flex-grow pt-20 pb-24 sm:pb-0">
-        {/* Mobile App Bar */}
-        <div className="px-4 py-4 flex justify-between items-center bg-white sm:hidden sticky top-20 z-30 shadow-sm">
-          <div className="flex items-center gap-2">
-            <div className="bg-amber-100 p-2 rounded-lg">
-              <MapPin className="w-4 h-4 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest">Delivering to</p>
-              <p className="text-sm font-black text-stone-900 leading-tight">{locationName}</p>
-            </div>
-          </div>
-          <button className="relative p-2 bg-stone-100 rounded-full">
-            <Bell className="w-5 h-5 text-stone-600" />
-            <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
-          </button>
-        </div>
+  const renderContent = () => {
+    if (activeTab === 'payment-success') {
+      return (
+        <PaymentSuccess 
+          onGoHome={() => {
+            setActiveTab('menu');
+            setCart([]);
+            window.history.replaceState({}, document.title, '/');
+          }}
+          onViewOrders={() => {
+            setActiveTab('profile');
+            setCart([]);
+            window.history.replaceState({}, document.title, '/');
+          }}
+        />
+      );
+    }
 
-        <Hero />
-        
-        {/* Horizontal Category Scroll for App-feel */}
-        <div className="sticky top-20 sm:top-24 z-20 bg-stone-50/80 backdrop-blur-md py-4 border-b border-stone-200 overflow-x-auto whitespace-nowrap px-4 flex gap-3 no-scrollbar sm:hidden">
-          {CATEGORIES.map(cat => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-6 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
-                selectedCategory === cat 
-                ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30' 
-                : 'bg-white text-stone-600 border border-stone-100'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-
-        {/* Desktop Categories */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12" id="menu">
-          <div className="hidden sm:flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
-            <div>
-              <h2 className="text-4xl font-black text-stone-900 mb-2">Explore Our Menu</h2>
-              <p className="text-stone-500 max-w-lg">From the heart of Soweto to the shores of Cape Town.</p>
+    if (user && user.role === 'customer') {
+      if (activeTab === 'profile') return <ProfileView />;
+      if (activeTab === 'wallet') return <WalletView />;
+      if (activeTab === 'settings') return <SettingsView />;
+      if (activeTab === 'wishlist') return (
+        <FavoritesView 
+          wishlist={wishlist} 
+          menuItems={menuItems} 
+          onAddToCart={addToCart} 
+          onToggleWishlist={toggleWishlist}
+          onBack={() => setActiveTab('menu')}
+        />
+      );
+      if (activeTab === 'location') return <MapView />;
+      if (activeTab === 'offers') {
+        const discountedItems = menuItems.filter(item => item.originalPrice);
+        return (
+          <div className="max-w-7xl mx-auto px-4 py-8">
+            <div className="flex flex-col items-center gap-4 mb-12">
+              <h2 className="text-4xl font-black text-white uppercase tracking-tighter italic">Hot Deals</h2>
+              <p className="text-white/40 text-sm font-bold uppercase tracking-widest">Exclusive discounts for you</p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map(cat => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-                    selectedCategory === cat ? 'bg-amber-500 text-white shadow-lg' : 'bg-white text-stone-600 border border-stone-200'
-                  }`}
-                >
-                  {cat}
-                </button>
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
+              {discountedItems.map(item => (
+                <FoodCard 
+                  key={item.id} 
+                  item={item} 
+                  onAddToCart={() => addToCart(item)} 
+                  isLiked={wishlist.includes(item.id)}
+                  onToggleWishlist={() => toggleWishlist(item.id)}
+                />
               ))}
             </div>
           </div>
+        );
+      }
+    }
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-            {filteredMenu.map(item => (
-              <FoodCard key={item.id} item={item} onAddToCart={() => addToCart(item)} />
-            ))}
-          </div>
-        </section>
-
-        {/* Heritage App Section */}
-        <section className="bg-stone-900 text-white py-16 sm:py-24">
-          <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-            <img 
-              src="https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=800" 
-              className="rounded-[2.5rem] shadow-2xl w-full"
-              alt="Braai"
-            />
-            <div>
-              <h2 className="text-4xl font-black mb-6 leading-tight">Authentic. Lekker. Home.</h2>
-              <p className="text-stone-400 text-lg leading-relaxed mb-8">
-                Every dish is a tribute to the diverse cultures that make South Africa special.
-              </p>
-              <button className="bg-amber-500 text-stone-950 font-black px-8 py-4 rounded-2xl hover:scale-105 transition-transform">
-                Read Our Story
-              </button>
+    if (!user || user.role === 'customer') {
+      if (activeTab === 'wishlist') return (
+        <FavoritesView 
+          wishlist={wishlist} 
+          menuItems={menuItems} 
+          onAddToCart={addToCart} 
+          onToggleWishlist={toggleWishlist}
+          onBack={() => setActiveTab('menu')}
+        />
+      );
+      if (activeTab === 'location') return <MapView />;
+      if (activeTab === 'offers') {
+        const discountedItems = menuItems.filter(item => item.originalPrice);
+        return (
+          <div className="max-w-7xl mx-auto px-4 py-8">
+            <div className="flex flex-col items-center gap-4 mb-12">
+              <h2 className="text-4xl font-black text-white uppercase tracking-tighter italic">Hot Deals</h2>
+              <p className="text-white/40 text-sm font-bold uppercase tracking-widest">Exclusive discounts for you</p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
+              {discountedItems.map(item => (
+                <FoodCard 
+                  key={item.id} 
+                  item={item} 
+                  onAddToCart={() => addToCart(item)} 
+                  isLiked={wishlist.includes(item.id)}
+                  onToggleWishlist={() => toggleWishlist(item.id)}
+                />
+              ))}
             </div>
           </div>
-        </section>
+        );
+      }
+      return (
+        <>
+          <Hero onOpenAuth={() => setIsAuthOpen(true)} />
+          <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 py-4 sm:py-8 flex flex-col lg:flex-row gap-4 sm:gap-8">
+            {/* Sidebar Filters */}
+            <aside className="hidden lg:block w-64 flex-shrink-0 space-y-8">
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-6 uppercase tracking-tighter">Bestsellers</h2>
+                <div className="space-y-3">
+                  <div 
+                    onClick={() => setSelectedCategory('All')}
+                    className={`flex items-center justify-between group cursor-pointer ${selectedCategory === 'All' ? 'text-lime' : 'text-white/40 hover:text-white'}`}
+                  >
+                    <span className="text-sm font-bold transition-colors">All items</span>
+                    {selectedCategory === 'All' && <div className="w-1 h-1 bg-lime rounded-full" />}
+                  </div>
+                  {CATEGORIES.filter(c => c !== 'All').map(cat => (
+                    <div 
+                      key={cat} 
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`flex items-center justify-between group cursor-pointer ${selectedCategory === cat ? 'text-lime' : 'text-white/40 hover:text-white'}`}
+                    >
+                      <span className="text-sm font-bold transition-colors">{cat}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Price</h3>
+                  <button className="text-white/40 hover:text-white transition-colors">
+                    <Utensils className="w-4 h-4 rotate-180" />
+                  </button>
+                </div>
+                <div className="h-1 bg-white/5 rounded-full relative">
+                  <div className="absolute inset-y-0 left-0 right-1/4 bg-lime rounded-full" />
+                  <div className="absolute top-1/2 left-0 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-xl" />
+                  <div className="absolute top-1/2 right-1/4 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-xl" />
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Spiciness</h3>
+                  <button className="text-white/40 hover:text-white transition-colors">
+                    <Utensils className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {['Mild', 'Medium', 'Hot'].map(level => (
+                    <label key={level} className="flex items-center gap-3 cursor-pointer group">
+                      <div className="w-5 h-5 rounded-full border border-white/10 group-hover:border-lime transition-colors flex items-center justify-center">
+                        <div className="w-2 h-2 bg-lime rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-[0_0_8px_rgba(163,230,53,0.5)]" />
+                      </div>
+                      <span className="text-xs font-bold text-white/40 group-hover:text-white transition-colors uppercase tracking-widest">{level}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </aside>
+
+            {/* Main Content */}
+            <div className="flex-grow">
+              <div className="mb-8">
+                <span className="text-sm font-medium text-white/60">Black 's Store</span>
+              </div>
+              
+              <CategorySection 
+                onSelectCategory={setSelectedCategory} 
+                selectedCategory={selectedCategory} 
+              />
+
+              <div className="flex flex-col items-center gap-6 mb-8">
+                <h2 className="text-3xl font-bold text-white">Menu Items</h2>
+                <div className="flex items-center justify-center w-full">
+                  <div className="bg-white/5 p-0.5 rounded-full flex gap-1 border border-white/10">
+                    <button className="px-5 py-1.5 rounded-full text-[10px] font-bold bg-lime text-black transition-all">
+                      Discover
+                    </button>
+                    <button className="px-5 py-1.5 rounded-full text-[10px] font-bold text-white/40 hover:text-white transition-all">
+                      Following
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mobile Categories (Keep for fallback or remove if CategorySection is enough) */}
+              <div className="lg:hidden flex gap-3 overflow-x-auto pb-6 no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 mb-4">
+                {CATEGORIES.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`px-6 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap border ${
+                      selectedCategory === cat 
+                      ? 'bg-lime text-black border-lime' 
+                      : 'bg-white/5 text-white/40 border-white/10'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-8">
+                {filteredMenu.map(item => (
+                  <FoodCard 
+                    key={item.id} 
+                    item={item} 
+                    onAddToCart={() => addToCart(item)} 
+                    isLiked={wishlist.includes(item.id)}
+                    onToggleWishlist={() => toggleWishlist(item.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    if (user.role === 'store') return <StoreDashboard />;
+    if (user.role === 'driver') return <DriverDashboard />;
+    if (user.role === 'admin') return <AdminDashboard />;
+
+    return null;
+  };
+
+  return (
+    <div className="min-h-screen relative flex flex-col overflow-x-hidden bg-black text-white">
+      <Header 
+        cartCount={cartCount} 
+        onOpenCart={() => setIsCartOpen(true)}
+        onOpenAuth={() => setIsAuthOpen(true)}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        setActiveTab={setActiveTab}
+      />
+      
+      <main className={`flex-grow ${activeTab === 'location' ? 'h-[calc(100vh-112px)] sm:h-[calc(100vh-64px)] pt-14 sm:pt-16 pb-14 sm:pb-0 px-0' : 'pt-14 sm:pt-20 pb-8 sm:pb-2 px-3 sm:px-6'}`}>
+        {renderContent()}
       </main>
 
-      <footer className="bg-stone-50 border-t border-stone-200 py-12 pb-32 sm:pb-12 px-6">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl font-black">MZANTSI<span className="text-amber-500">BITES</span></span>
+      {activeTab !== 'location' && (
+        <footer className="bg-black text-white border-t border-white/5 py-2 pb-14 sm:pb-2 px-6">
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-bold tracking-tighter uppercase">MZANTSI<span className="text-lime">BITES</span></span>
+            </div>
+            <p className="text-white/20 text-[8px] font-bold uppercase tracking-[0.3em]">© 2025 Mzantsi Bites App. Built for the Nation.</p>
           </div>
-          <p className="text-stone-500 text-sm">© 2025 Mzantsi Bites App. Built for the Nation.</p>
-        </div>
-      </footer>
+        </footer>
+      )}
 
       <BottomNav 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
         onOpenChat={() => setIsChatOpen(true)}
+        onOpenCart={() => setIsCartOpen(true)}
+        onOpenAuth={() => setIsAuthOpen(true)}
         cartCount={cartCount}
+        user={user}
       />
 
       {/* Desktop Chat Toggle */}
       <button 
         onClick={() => setIsChatOpen(true)}
-        className="hidden sm:flex fixed bottom-6 right-6 bg-amber-500 text-white p-4 rounded-full shadow-2xl hover:scale-110 transition-transform items-center justify-center z-40"
+        className="hidden sm:flex fixed bottom-8 right-8 bg-lime text-black p-5 rounded-[24px] shadow-2xl shadow-lime/20 hover:scale-110 transition-all items-center justify-center z-40 active:scale-90"
       >
-        <span className="absolute -top-1 -right-1 flex h-4 w-4">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-stone-900 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-4 w-4 bg-stone-900"></span>
-        </span>
         <Utensils className="w-6 h-6" />
       </button>
 
@@ -189,6 +423,12 @@ const App: React.FC = () => {
         onClose={() => setIsCartOpen(false)} 
         items={cart} 
         onUpdateQuantity={updateQuantity}
+        onOpenAuth={() => setIsAuthOpen(true)}
+      />
+
+      <AuthModal 
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
       />
 
       <ChatBot 
@@ -196,6 +436,18 @@ const App: React.FC = () => {
         onClose={() => setIsChatOpen(false)} 
       />
     </div>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <ThemeProvider>
+      <AuthProvider>
+        <LocationProvider>
+          <AppContent />
+        </LocationProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 

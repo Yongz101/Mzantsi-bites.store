@@ -2,7 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import './services/firebase'; // Initialize Firebase
+import './firebase'; // Initialize Firebase
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

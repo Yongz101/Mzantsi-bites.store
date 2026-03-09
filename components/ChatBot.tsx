@@ -51,72 +51,75 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen, onClose }) => {
         className="fixed inset-0 bg-stone-900/20 backdrop-blur-[1px] z-50 md:hidden"
         onClick={onClose}
       />
-      <div className="fixed bottom-0 right-0 md:bottom-24 md:right-6 w-full md:w-[450px] h-[100dvh] md:h-[650px] bg-white z-50 md:rounded-3xl shadow-2xl border border-stone-100 flex flex-col overflow-hidden animate-[slideUp_0.3s_ease-out]">
+      <div className="fixed bottom-0 right-0 md:bottom-24 md:right-6 w-full md:w-[450px] h-[92dvh] md:h-[650px] bg-black z-50 rounded-t-[32px] md:rounded-[32px] shadow-2xl shadow-lime/5 border border-white/10 flex flex-col overflow-hidden animate-[slideUp_0.3s_ease-out] transition-all duration-500">
+        {/* Mobile Handle */}
+        <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mt-3 mb-1 md:hidden shrink-0" />
+        
         {/* Header */}
-        <div className="bg-amber-500 p-6 flex items-center justify-between text-white shrink-0">
+        <div className="bg-lime p-6 flex items-center justify-between text-black shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
-              <UtensilsCrossed className="w-7 h-7" />
+            <div className="w-12 h-12 bg-black rounded-2xl flex items-center justify-center">
+              <UtensilsCrossed className="w-7 h-7 text-lime" />
             </div>
             <div>
-              <h3 className="font-black text-xl leading-none">Aunty Mzansi</h3>
-              <p className="text-white/80 text-xs mt-1 font-medium">South African Cuisine Expert</p>
+              <h3 className="font-bold text-xl leading-none uppercase tracking-tighter">Aunty Mzansi</h3>
+              <p className="text-black/60 text-[10px] mt-1 font-bold uppercase tracking-widest">Cuisine Expert</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-black/10 rounded-xl transition-colors">
             <X className="w-6 h-6" />
           </button>
         </div>
 
         {/* Chat window */}
-        <div className="flex-grow overflow-y-auto p-6 flex flex-col gap-6 scroll-smooth bg-stone-50">
+        <div className="flex-grow overflow-y-auto p-6 flex flex-col gap-6 scroll-smooth bg-black">
           {messages.map((msg, idx) => (
             <div 
               key={idx} 
               className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
             >
-              <div className={`max-w-[85%] px-5 py-4 rounded-3xl text-sm leading-relaxed shadow-sm ${
+              <div className={`max-w-[85%] px-5 py-4 rounded-[24px] text-xs font-bold leading-relaxed border ${
                 msg.role === 'user' 
-                  ? 'bg-stone-900 text-white rounded-br-none' 
-                  : 'bg-white text-stone-800 rounded-bl-none border border-stone-100'
+                  ? 'bg-lime text-black border-lime' 
+                  : 'bg-white/5 text-white border-white/10'
               }`}>
                 {msg.text}
               </div>
-              <span className="text-[10px] text-stone-400 mt-1 uppercase tracking-widest font-bold">
+              <span className="text-[10px] text-white/20 mt-2 uppercase tracking-widest font-bold">
                 {msg.role === 'user' ? 'You' : 'Aunty Mzansi'}
               </span>
             </div>
           ))}
           {isLoading && (
             <div className="flex flex-col items-start animate-pulse">
-              <div className="bg-stone-200 w-16 h-8 rounded-full"></div>
+              <div className="bg-white/5 w-16 h-8 rounded-xl border border-white/10"></div>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
         {/* Input */}
-        <div className="p-6 bg-white border-t border-stone-100 shrink-0">
+        <div className="p-6 bg-black border-t border-white/5 shrink-0">
           <div className="flex gap-3">
             <input 
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="Ask about Bobotie or Bunny Chow..."
-              className="flex-grow bg-stone-100 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 transition-all border-none"
+              placeholder="ASK SOMETHING..."
+              className="flex-grow bg-white/5 border border-white/10 rounded-full px-6 py-4 text-xs font-bold uppercase tracking-widest focus:outline-none focus:border-lime transition-all text-white"
             />
             <button 
               onClick={handleSend}
               disabled={isLoading || !input.trim()}
-              className="bg-amber-500 text-white p-4 rounded-2xl shadow-lg shadow-amber-500/20 hover:bg-amber-600 active:scale-95 disabled:opacity-50 transition-all"
+              className="bg-lime text-black p-4 rounded-full hover:bg-lime/90 active:scale-95 disabled:opacity-50 transition-all"
             >
               <Send className="w-5 h-5" />
             </button>
           </div>
-          <div className="mt-4 flex items-center justify-center gap-1.5 opacity-50">
+          <div className="mt-4 flex items-center justify-center gap-1.5 opacity-20 text-white">
             <Info className="w-3 h-3" />
-            <span className="text-[10px] font-bold uppercase tracking-wider">AI Powered by Gemini</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest">AI Powered by Gemini</span>
           </div>
         </div>
       </div>
